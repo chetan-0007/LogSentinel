@@ -1,29 +1,29 @@
-LogSentinel
-Real-Time Distributed Log Monitoring, Alerting & Email Notification Platform
+# LogSentinel
 
-LogSentinel is a distributed log ingestion and monitoring system built using FastAPI, PostgreSQL, and Kafka. It enables real-time log streaming, automated error rate monitoring, alert tracking, email notifications, and dashboard visualization — fully containerized using Docker.
+**Real-Time Distributed Log Monitoring, Alerting & Email Notification Platform**
 
-Overview
+LogSentinel is a distributed log ingestion and monitoring system built using FastAPI, PostgreSQL, and Kafka. It enables real-time log streaming, automated error rate monitoring, alert tracking, email notifications, and dashboard visualization — fully containerized with Docker.
+
+---
+
+## 📖 Overview
 
 LogSentinel simulates a production-grade observability pipeline:
 
-Applications send logs via REST API
-
-Logs are streamed through Kafka
-
-A consumer processes and stores logs in PostgreSQL
-
-A monitoring engine evaluates error rates
-
-Alerts are triggered automatically when thresholds are exceeded
-
-Email notifications are sent for critical alerts
-
-A dashboard visualizes logs and alert data
+1. Applications send logs via REST API
+2. Logs are streamed through Kafka
+3. A consumer processes and stores logs in PostgreSQL
+4. A monitoring engine evaluates error rates
+5. Alerts are triggered automatically when thresholds are exceeded
+6. Email notifications are sent for critical alerts
+7. A dashboard visualizes logs and alert data
 
 This project demonstrates event-driven architecture, distributed systems, and automated alerting workflows.
 
-Architecture
+---
+
+## 🏗 Architecture
+
 Client → FastAPI → Kafka → Consumer → PostgreSQL
 ↓
 Monitoring Engine
@@ -31,70 +31,67 @@ Monitoring Engine
 Alerts
 ↓
 Email Notifications
-Core Components
 
-API Service – Log ingestion & dashboard endpoints
+### Components
 
-Kafka Broker – Message streaming backbone
+- **API Service** – Log ingestion & dashboard endpoints
+- **Kafka Broker** – Message streaming backbone
+- **Consumer Service** – Processes and stores logs
+- **PostgreSQL** – Persistent storage
+- **Monitoring Engine** – Automated alert generation
+- **Email Notification Service** – Sends alert emails
+- **Dashboard UI** – Visualizes logs and alerts
+- **Docker Compose** – Multi-container orchestration
 
-Consumer Service – Processes and stores logs
+---
 
-PostgreSQL – Persistent storage
+## 🚀 Features
 
-Monitoring Engine – Automated alert generation
+- Real-time log ingestion
+- Kafka-based streaming pipeline
+- Automated error rate monitoring
+- Active and historical alert tracking
+- Email notifications for critical alerts
+- Dashboard APIs
+- Background monitoring thread
+- Fully containerized environment
 
-Email Notification Service – Sends alert emails
+---
 
-Dashboard UI – Visualizes logs and alerts
-
-Docker Compose – Multi-container orchestration
-
-Features
-
-Real-time log ingestion
-
-Kafka-based streaming pipeline
-
-Automated error rate monitoring
-
-Active and historical alert tracking
-
-Email notifications for critical alerts
-
-Dashboard APIs
-
-Background monitoring thread
-
-Fully containerized environment
-
-Email Alert System
+## 📧 Email Alerts
 
 When error rates exceed configured thresholds:
 
-An alert is created and stored in the database
+- An alert is created and stored in the database
+- The system sends an automated email notification
+- Email contains:
+  - Service name
+  - Error rate percentage
+  - Time window analyzed
+  - Alert timestamp
 
-The monitoring engine triggers an email notification
+### Example Use Cases
 
-Email includes:
+- Service crash detection
+- Error spike detection
+- Production incident notification
+- Automated operational monitoring
 
-Service name
+### Example Environment Variables for Email
 
-Error rate percentage
-
-Time window analyzed
-
-Alert timestamp
-
-Required Environment Variables for Email
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your_email@gmail.com
+
 SMTP_PASSWORD=your_app_password
 ALERT_RECEIVER=admin@example.com
 
-Use app-specific passwords instead of your real email password for security.
+> ⚠️ Use app-specific passwords for production environments.
 
-Project Structure
+---
+
+## 📂 Project Structure
+
 LogSentinel/
 │
 ├── app/
@@ -114,13 +111,18 @@ LogSentinel/
 ├── requirements.txt
 ├── .env
 └── send_bulk_errors.py
-Setup & Installation
 
-1. Clone Repository
-   git clone https://github.com/yourusername/LogSentinel.git
-   cd LogSentinel
-2. Create .env File
+---
 
+## ⚙️ Setup & Installation
+
+### 1️⃣ Clone Repository
+
+```bash
+git clone https://github.com/yourusername/LogSentinel.git
+cd LogSentinel
+
+2️⃣ Create Environment File
 Create a .env file in the project root:
 
 POSTGRES_DB=logs_db
@@ -133,7 +135,10 @@ SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USERNAME=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
-ALERT_RECEIVER=admin@example.com 3. Run with Docker
+ALERT_RECEIVER=admin@example.com
+
+
+3️⃣ Run with Docker
 docker compose up --build
 
 Access:
@@ -144,96 +149,7 @@ Swagger Docs → http://localhost:8000/docs
 
 Dashboard → http://localhost:8000/
 
-To stop:
+To stop services:
 
 docker compose down
-API Endpoints
-Log Ingestion
-POST /logs
-Alerts
-GET /alerts/check
-GET /api/alerts/active
-GET /api/alerts/history
-Dashboard Data
-GET /api/logs/recent
-GET /api/stats/error-rates
-Testing Alert System
-
-To simulate high error rates:
-
-python send_bulk_errors.py
-
-This will trigger alert generation and email notifications.
-
-Tech Stack
-
-Python 3.11+
-
-FastAPI
-
-SQLAlchemy
-
-PostgreSQL
-
-Apache Kafka
-
-SMTP (Email Notifications)
-
-Docker & Docker Compose
-
-Uvicorn
-
-Development Without Docker
-
-Create virtual environment:
-
-python -m venv venv
-venv\Scripts\activate
-
-Install dependencies:
-
-pip install -r requirements.txt
-
-Run application:
-
-uvicorn app.main:app --reload
-Future Improvements
-
-Prometheus integration
-
-Grafana dashboard
-
-JWT authentication
-
-Rate limiting
-
-Structured logging (JSON logs)
-
-Kubernetes deployment
-
-Horizontal scaling
-
-CI/CD integration
-
-Slack / Webhook alert support
-
-What This Project Demonstrates
-
-Event-driven architecture
-
-Distributed system design
-
-Stream processing with Kafka
-
-Automated monitoring & alerting
-
-Email notification pipelines
-
-Containerized microservices
-
-Observability principles
-
-Author
-
-Your Name
-Backend / Distributed Systems Engineer
+```
