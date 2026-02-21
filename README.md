@@ -24,13 +24,19 @@ This project demonstrates event-driven architecture, distributed systems, and au
 
 ## 🏗 Architecture
 
-Client → FastAPI → Kafka → Consumer → PostgreSQL
-↓
-Monitoring Engine
-↓
-Alerts
-↓
-Email Notifications
+```mermaid
+flowchart LR
+    A[Client] --> B[FastAPI API]
+    B --> C[Kafka Broker]
+    C --> D[Kafka Consumer]
+    D --> E[PostgreSQL]
+
+    E --> F[Monitoring Engine]
+    F --> G[Alert System]
+    G --> H[Email Notifications]
+
+    E --> I[Dashboard APIs]
+```
 
 ### Components
 
@@ -90,30 +96,6 @@ ALERT_RECEIVER=admin@example.com
 
 ---
 
-## 📂 Project Structure
-
-LogSentinel/
-│
-├── app/
-│ ├── main.py
-│ ├── database.py
-│ ├── models.py
-│ ├── schemas.py
-│ ├── kafka_producer.py
-│ ├── consumer.py
-│ ├── monitoring.py
-│ ├── email_service.py
-│ ├── dashboard_logic.py
-│ └── static/dashboard.html
-│
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-├── .env
-└── send_bulk_errors.py
-
----
-
 ## ⚙️ Setup & Installation
 
 ### 1️⃣ Clone Repository
@@ -121,13 +103,11 @@ LogSentinel/
 ```bash
 git clone https://github.com/yourusername/LogSentinel.git
 cd LogSentinel
-
----
-
 ```
 
 ### 1️⃣ Create Environment File
 
+```bash
 POSTGRES_DB=logs_db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
@@ -139,19 +119,77 @@ SMTP_PORT=587
 SMTP_USERNAME=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 ALERT_RECEIVER=admin@example.com
+```
 
 ### 3️⃣ Run with Docker
 
+```bash
 docker compose up --build
+```
 
 ### Access:
 
+```
 API → http://localhost:8000
-
 Swagger Docs → http://localhost:8000/docs
-
 Dashboard → http://localhost:8000/
+```
 
 ### To stop services:
 
+```bash
 docker compose down
+```
+
+## 📡 API Endpoints
+
+### Log Ingestion
+
+```bash
+POST /logs
+```
+
+### Monitoring & Alerts
+
+```bash
+GET /alerts/check
+GET /api/alerts/active
+GET /api/alerts/history
+```
+
+### Dashboard Data
+
+```bash
+GET /api/logs/recent
+GET /api/stats/error-rates
+```
+
+## 🔍 Automated Monitoring
+
+- Runs every 10 minutes (configurable)
+- Calculates error rates per service
+- Triggers alerts when thresholds are exceeded
+- Stores alert history
+- Tracks active alerts
+
+### 🧪 Testing Alert System
+
+- To simulate error spikes:
+
+```bash
+python send_bulk_errors.py
+```
+
+### 🛠 Tech Stack
+
+- Python 3.11+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- Apache Kafka
+- Docker & Docker Compose
+- Uvicorn
+
+### 👤 Author
+
+- Chetan Mittal
