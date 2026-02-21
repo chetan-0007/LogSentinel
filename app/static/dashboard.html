@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .timestamp {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card.warning .stat-value {
+            color: #f59e0b;
+        }
+
+        .stat-card.danger .stat-value {
+            color: #ef4444;
+        }
+
+        .chart-card {
+            grid-column: span 2;
+        }
+
+        @media (max-width: 900px) {
+            .chart-card {
+                grid-column: span 1;
+            }
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        h2 {
+            color: #333;
+            font-size: 20px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .logs-table {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-error {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .badge-warning {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .badge-info {
+            background: #dbeafe;
+            color: #0284c7;
+        }
+
+        .badge-success {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .badge-alert {
+            background: #ffe0e0;
+            color: #dc2626;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .alert-box {
+            background: #fee2e2;
+            border-left: 4px solid #dc2626;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+        }
+
+        .alert-box.info {
+            background: #dbeafe;
+            border-left-color: #0284c7;
+        }
+
+        .alert-time {
+            color: #666;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .refresh-info {
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Log Analytics Dashboard</h1>
+            <p class="timestamp">Real-time monitoring with Kafka streaming</p>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="dashboard-grid">
+            <div class="card stat-card">
+                <div class="stat-label">Total Logs (1h)</div>
+                <div class="stat-value" id="total-logs">-</div>
+            </div>
+            <div class="card stat-card warning">
+                <div class="stat-label">Active Alerts</div>
+                <div class="stat-value" id="active-alerts">-</div>
+            </div>
+            <div class="card stat-card">
+                <div class="stat-label">Services</div>
+                <div class="stat-value" id="total-services">-</div>
+            </div>
+
+            <!-- Error Rate Chart -->
+            <div class="card chart-card">
+                <h3>Error Rates by Service</h3>
+                <div class="chart-container">
+                    <canvas id="errorRateChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Active Alerts -->
+            <div class="card">
+                <h3>🚨 Active Alerts</h3>
+                <div id="active-alerts-list" class="no-data">No active alerts</div>
+                <div class="refresh-info">Updates every 10 seconds</div>
+            </div>
+        </div>
+
+        <!-- Recent Logs Section -->
+        <h2>Recent Logs</h2>
+        <div class="logs-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Level</th>
+                        <th>Message</th>
+                        <th>Timestamp</th>
+                        <th>Latency (ms)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-tbody">
+                    <tr><td colspan="6" class="no-data">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Alert History -->
+        <h2>Alert History (Last 24h)</h2>
+        <div class="logs-table">
+            <div id="alert-history" class="no-data">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        // Chart instances
+        let errorRateChart = null;
+
+        // Fetch and update data
+        async function updateDashboard() {
+            try {
+                // Get all data in parallel
+                const [logsRes, alertsRes, historyRes, statsRes] = await Promise.all([
+                    fetch('/api/logs/recent?limit=15'),
+                    fetch('/api/alerts/active'),
+                    fetch('/api/alerts/history?limit=10'),
+                    fetch('/api/stats/error-rates')
+                ]);
+
+                const logs = await logsRes.json();
+                const alerts = await alertsRes.json();
+                const history = await historyRes.json();
+                const stats = await statsRes.json();
+
+                updateLogsTable(logs);
+                updateAlerts(alerts);
+                updateAlertHistory(history);
+                updateErrorChart(stats);
+                updateStats(logs, alerts, stats);
+            } catch (error) {
+                console.error('Failed to update dashboard:', error);
+            }
+        }
+
+        function updateLogsTable(logs) {
+            const tbody = document.getElementById('logs-tbody');
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-data">No logs yet</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => `
+                <tr>
+                    <td><strong>${log.service}</strong></td>
+                    <td><span class="badge badge-${getLevelClass(log.level)}">${log.level}</span></td>
+                    <td>${log.message}</td>
+                    <td>${formatTime(log.timestamp)}</td>
+                    <td>${log.latency_ms ? log.latency_ms + ' ms' : '-'}</td>
+                    <td>${log.status_code ? log.status_code : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateAlerts(alerts) {
+            const container = document.getElementById('active-alerts-list');
+            if (alerts.length === 0) {
+                container.innerHTML = '<div class="no-data">No active alerts ✅</div>';
+                document.getElementById('active-alerts').textContent = '0';
+                return;
+            }
+
+            document.getElementById('active-alerts').textContent = alerts.length;
+            container.innerHTML = alerts.map(alert => `
+                <div class="alert-box">
+                    <strong>🔴 ${alert.service}</strong>
+                    <div class="alert-time">Triggered: ${formatTime(alert.triggered_at)}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateAlertHistory(history) {
+            const container = document.getElementById('alert-history');
+            if (history.length === 0) {
+                container.innerHTML = '<div class="no-data">No alert history</div>';
+                return;
+            }
+
+            container.innerHTML = history.map(h => `
+                <div class="alert-box info">
+                    <strong>${h.service}</strong> - Error Rate: <strong>${h.error_rate.toFixed(2)}%</strong> 
+                    (Baseline: ${h.baseline_rate ? h.baseline_rate.toFixed(2) + '%' : 'N/A'})
+                    <div class="alert-time">${formatTime(h.timestamp)}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateErrorChart(stats) {
+            const ctx = document.getElementById('errorRateChart');
+            if (!ctx) return;
+
+            if (errorRateChart) {
+                errorRateChart.destroy();
+            }
+
+            const colors = stats.map(s => s.error_rate > 10 ? '#ef4444' : s.error_rate > 5 ? '#f59e0b' : '#10b981');
+
+            errorRateChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: stats.map(s => s.service),
+                    datasets: [{
+                        label: 'Error Rate (%)',
+                        data: stats.map(s => s.error_rate),
+                        backgroundColor: colors,
+                        borderRadius: 5,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                suffix: '%'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateStats(logs, alerts, stats) {
+            // Total logs (1h) should reflect the full 1-hour window.
+            // Sum the `total_logs` returned by the stats endpoint.
+            const totalLogs = stats.reduce((acc, s) => acc + (s.total_logs || 0), 0);
+            document.getElementById('total-logs').textContent = totalLogs;
+            document.getElementById('total-services').textContent = stats.length;
+        }
+
+        function getLevelClass(level) {
+            const map = { ERROR: 'error', WARNING: 'warning', INFO: 'info', DEBUG: 'info' };
+            return map[level] || 'info';
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return '-';
+            return new Date(timestamp).toLocaleString();
+        }
+
+        // Initial update
+        updateDashboard();
+
+        // Refresh every 10 seconds
+        setInterval(updateDashboard, 10000);
+    </script>
+</body>
+</html>
