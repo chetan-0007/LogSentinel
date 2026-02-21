@@ -122,8 +122,11 @@ LogSentinel/
 git clone https://github.com/yourusername/LogSentinel.git
 cd LogSentinel
 
-2️⃣ Create Environment File
-Create a .env file in the project root:
+---
+
+```
+
+### 1️⃣ Create Environment File
 
 POSTGRES_DB=logs_db
 POSTGRES_USER=postgres
@@ -137,11 +140,11 @@ SMTP_USERNAME=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 ALERT_RECEIVER=admin@example.com
 
+### 3️⃣ Run with Docker
 
-3️⃣ Run with Docker
 docker compose up --build
 
-Access:
+### Access:
 
 API → http://localhost:8000
 
@@ -149,7 +152,6 @@ Swagger Docs → http://localhost:8000/docs
 
 Dashboard → http://localhost:8000/
 
-To stop services:
+### To stop services:
 
 docker compose down
-```
