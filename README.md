@@ -1,8 +1,10 @@
 # LogSentinel
 
-**Real-Time Distributed Log Monitoring, Alerting & Email Notification Platform**
+**AI-Powered Distributed Log Monitoring & Incident Intelligence Platformm**
 
-LogSentinel is a distributed log ingestion and monitoring system built using FastAPI, PostgreSQL, and Kafka. It enables real-time log streaming, automated error rate monitoring, alert tracking, email notifications, and dashboard visualization — fully containerized with Docker.
+SentinelAI is a production-style distributed observability system that performs real-time log ingestion, automated anomaly detection, intelligent alerting, and AI-powered root cause summarization.
+
+Built using FastAPI, Kafka, PostgreSQL, and Docker, the system simulates a scalable monitoring architecture used in modern cloud-native environments.
 
 ---
 
@@ -15,10 +17,11 @@ LogSentinel simulates a production-grade observability pipeline:
 3. A consumer processes and stores logs in PostgreSQL
 4. A monitoring engine evaluates error rates
 5. Alerts are triggered automatically when thresholds are exceeded
-6. Email notifications are sent for critical alerts
-7. A dashboard visualizes logs and alert data
+6. AI analyzes logs and generates root-cause summaries
+7. Email notifications are sent with intelligent insights
+8. A dashboard visualizes logs and alert data
 
-This project demonstrates event-driven architecture, distributed systems, and automated alerting workflows.
+The platform demonstrates event-driven architecture, distributed systems design, background scheduling, and AI integration for operational intelligence.
 
 ---
 
@@ -33,6 +36,7 @@ flowchart LR
 
     E --> F[Monitoring Engine]
     F --> G[Alert System]
+    F --> G[AI Log Analyzer]
     G --> H[Email Notifications]
 
     E --> I[Dashboard APIs]
@@ -56,6 +60,7 @@ flowchart LR
 - Real-time log ingestion
 - Kafka-based streaming pipeline
 - Automated error rate monitoring
+- Logs are analyzed using a Large Language Model (LLM)
 - Active and historical alert tracking
 - Email notifications for critical alerts
 - Dashboard APIs
@@ -75,6 +80,9 @@ When error rates exceed configured thresholds:
   - Error rate percentage
   - Time window analyzed
   - Alert timestamp
+  - AI Root Cause Summary:
+    - Likely cause:
+    - Suggested action
 
 ### Example Use Cases
 
@@ -189,6 +197,7 @@ python send_bulk_errors.py
 - Apache Kafka
 - Docker & Docker Compose
 - Uvicorn
+- OpenAI API (LLM integration)
 
 ### 👤 Author
 

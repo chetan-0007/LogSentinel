@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone, timedelta
 from app.alerting import send_email_alert
+import os
 
 multiplier = 2
 static_threshold = 10
@@ -201,7 +202,7 @@ def check_error_rates(db: Session):
             services_triggered.append(service)
             # send notification email for alert
             try:
-                send_email_alert(service, current_rate, baseline_rate, now, recovered=False)
+                send_email_alert(service, current_rate, baseline_rate, now, db=db, recovered=False)
             except Exception as e:
                 print(f"[ALERT_MONITOR] email send failed: {e}")
 
@@ -239,7 +240,7 @@ def check_error_rates(db: Session):
                 services_triggered.append(f"{service} RECOVERED")
                 # send recovery email
                 try:
-                    send_email_alert(service, 0, baseline_rate, now, recovered=True)
+                    send_email_alert(service, 0, baseline_rate, now, recovered=True, db=db)
                 except Exception as e:
                     print(f"[ALERT_MONITOR] recovery email failed: {e}")
 
