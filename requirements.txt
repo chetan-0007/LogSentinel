@@ -2,7 +2,12 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 psycopg2-binary
-apscheduler
 python-dotenv
 kafka-python
-openai
+requests
+httpx
+anthropic
+langgraph
+langchain-anthropic
+langchain-core
+mcp

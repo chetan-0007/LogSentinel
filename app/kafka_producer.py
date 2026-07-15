@@ -1,6 +1,7 @@
 from kafka import KafkaProducer, errors
 import json
 import time
+from app.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC
 
 producer = None
 
@@ -14,7 +15,7 @@ def get_producer():
         while True:
             try:
                 producer = KafkaProducer(
-                    bootstrap_servers="kafka:9092",
+                    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
                     value_serializer=lambda v: json.dumps(v, default=_json_default).encode("utf-8")
                 )
                 print("Kafka producer connected")
@@ -28,7 +29,7 @@ def send_log(log_data: dict):
     p = get_producer()
     service = log_data.get("service", "unknown")
     try:
-        p.send("logs", key=service.encode("utf-8"), value=log_data)
+        p.send(KAFKA_TOPIC, key=service.encode("utf-8"), value=log_data)
         p.flush()
     except Exception as e:
         # Log to stdout so container logs capture it

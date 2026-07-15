@@ -219,6 +219,83 @@
             font-size: 12px;
             margin-top: 10px;
         }
+
+        .badge-sev-low { background: #dbeafe; color: #0284c7; }
+        .badge-sev-medium { background: #fef3c7; color: #d97706; }
+        .badge-sev-high { background: #ffedd5; color: #ea580c; }
+        .badge-sev-critical { background: #fee2e2; color: #dc2626; }
+
+        .rca-btn {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 4px 12px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .rca-btn:hover { background: #5568d3; }
+
+        .agent-reasoning {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #555;
+            white-space: pre-wrap;
+            background: #f9fafb;
+            border-radius: 6px;
+            padding: 8px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.open { display: flex; }
+
+        .modal {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 700px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal h2 { margin-top: 0; }
+
+        .modal-close {
+            float: right;
+            border: none;
+            background: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            line-height: 1;
+        }
+
+        .rca-field { margin-bottom: 12px; }
+        .rca-field .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+        }
+        .rca-field .value { font-size: 15px; color: #333; margin-top: 2px; }
     </style>
 </head>
 <body>
@@ -286,6 +363,15 @@
         </div>
     </div>
 
+    <!-- RCA Modal -->
+    <div class="modal-overlay" id="rca-modal" onclick="if(event.target===this)closeRCA()">
+        <div class="modal">
+            <button class="modal-close" onclick="closeRCA()">&times;</button>
+            <h2>Root Cause Analysis</h2>
+            <div id="rca-content">Loading...</div>
+        </div>
+    </div>
+
     <script>
         // Chart instances
         let errorRateChart = null;
@@ -347,9 +433,24 @@
             container.innerHTML = alerts.map(alert => `
                 <div class="alert-box">
                     <strong>🔴 ${alert.service}</strong>
+                    ${severityBadge(alert.severity)}
                     <div class="alert-time">Triggered: ${formatTime(alert.triggered_at)}</div>
+                    ${alert.agent_reasoning ? `<div class="agent-reasoning">${escapeHtml(alert.agent_reasoning)}</div>` : ''}
+                    ${alert.id != null ? `<button class="rca-btn" onclick="viewRCA(${alert.id})">View RCA</button>` : ''}
                 </div>
             `).join('');
+        }
+
+        function severityBadge(severity) {
+            if (!severity) return '';
+            const cls = 'badge-sev-' + severity.toLowerCase();
+            return `<span class="badge ${cls}">${severity}</span>`;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
 
         function updateAlertHistory(history) {
@@ -361,11 +462,46 @@
 
             container.innerHTML = history.map(h => `
                 <div class="alert-box info">
-                    <strong>${h.service}</strong> - Error Rate: <strong>${h.error_rate.toFixed(2)}%</strong> 
+                    <strong>${h.service}</strong>
+                    ${severityBadge(h.severity)}
+                    ${h.status ? `<span class="badge badge-${h.status === 'RESOLVED' ? 'success' : 'error'}">${h.status}</span>` : ''}
+                    - Error Rate: <strong>${h.error_rate.toFixed(2)}%</strong>
                     (Baseline: ${h.baseline_rate ? h.baseline_rate.toFixed(2) + '%' : 'N/A'})
                     <div class="alert-time">${formatTime(h.timestamp)}</div>
+                    ${h.agent_reasoning ? `<div class="agent-reasoning">${escapeHtml(h.agent_reasoning)}</div>` : ''}
+                    ${h.id != null ? `<button class="rca-btn" onclick="viewRCA(${h.id})">View RCA</button>` : ''}
                 </div>
             `).join('');
+        }
+
+        async function viewRCA(alertId) {
+            const modal = document.getElementById('rca-modal');
+            const content = document.getElementById('rca-content');
+            content.innerHTML = 'Loading...';
+            modal.classList.add('open');
+            try {
+                const res = await fetch(`/api/alerts/${alertId}/rca`);
+                if (!res.ok) {
+                    content.innerHTML = '<div class="no-data">No RCA report available yet for this alert.</div>';
+                    return;
+                }
+                const data = await res.json();
+                const r = data.rca_report || {};
+                content.innerHTML = `
+                    <div class="rca-field"><div class="label">Root Cause</div><div class="value">${escapeHtml(r.root_cause || 'n/a')}</div></div>
+                    <div class="rca-field"><div class="label">First Error At</div><div class="value">${escapeHtml(r.first_error_at || 'n/a')}</div></div>
+                    <div class="rca-field"><div class="label">Affected Services</div><div class="value">${escapeHtml((r.affected_services || []).join(', ') || 'n/a')}</div></div>
+                    <div class="rca-field"><div class="label">Cascade Detected</div><div class="value">${r.cascade_detected ? 'Yes' : 'No'}</div></div>
+                    <div class="rca-field"><div class="label">Confidence</div><div class="value">${escapeHtml(r.confidence || 'n/a')}</div></div>
+                    <div class="rca-field"><div class="label">Recommended Action</div><div class="value">${escapeHtml(r.recommended_action || 'n/a')}</div></div>
+                `;
+            } catch (e) {
+                content.innerHTML = `<div class="no-data">Failed to load RCA: ${escapeHtml(String(e))}</div>`;
+            }
+        }
+
+        function closeRCA() {
+            document.getElementById('rca-modal').classList.remove('open');
         }
 
         function updateErrorChart(stats) {

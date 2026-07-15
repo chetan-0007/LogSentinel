@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.dashboard_logic import (
     get_error_rates_logic,
 )
 from app.logs import create_log_logic
+import os
 import threading
 import time
 
@@ -23,7 +24,12 @@ app = FastAPI()
 @app.on_event("startup")
 def create_tables():
     Base.metadata.create_all(bind=engine)
-    # Start background alert monitor
+
+    # Start the background monitor in-process unless a dedicated monitoring-agent
+    # service is running (set RUN_MONITOR_IN_API=false on Railway in that case).
+    if os.getenv("RUN_MONITOR_IN_API", "true").lower() == "false":
+        return
+
     def run_alert_monitor():
         INTERVAL = 60 * 10  # 10 minutes
         while True:
@@ -54,9 +60,9 @@ def check_error_rates(db: Session = Depends(get_db)):
 # ========== DASHBOARD API ENDPOINTS ==========
 
 @app.get("/api/logs/recent")
-def get_recent_logs(limit: int = 50, db: Session = Depends(get_db)):
-    """Fetch recent logs for dashboard"""
-    return get_recent_logs_logic(limit, db)
+def get_recent_logs(limit: int = 50, service: str = None, db: Session = Depends(get_db)):
+    """Fetch recent logs for dashboard (optionally filtered by service)"""
+    return get_recent_logs_logic(limit, db, service=service)
 
 
 @app.get("/api/alerts/active")
@@ -72,9 +78,20 @@ def get_alert_history(limit: int = 20, db: Session = Depends(get_db)):
 
 
 @app.get("/api/stats/error-rates")
-def get_error_rates_by_service(db: Session = Depends(get_db)):
-    """Get current error rates by service"""
-    return get_error_rates_logic(db)
+def get_error_rates_by_service(service: str = None, db: Session = Depends(get_db)):
+    """Get current error rates by service (optionally filtered by service)"""
+    return get_error_rates_logic(db, service=service)
+
+
+@app.get("/api/alerts/{alert_id}/rca")
+def get_alert_rca(alert_id: int):
+    """Return the structured root-cause analysis report for an alert."""
+    from app.agents.rca_agent import get_rca
+
+    report = get_rca(alert_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="RCA report not available")
+    return {"alert_id": alert_id, "rca_report": report}
 
 
 # Serve dashboard HTML

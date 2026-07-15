@@ -1,63 +1,39 @@
+"""Email alerting.
+
+Sends an SMTP notification for an alert, embedding the agent's reasoning and the
+structured RCA report (produced by app.agents.rca_agent). All LLM work now lives
+in the agents; this module only formats and delivers email.
+
+Environment variables:
+  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, ALERT_TO, ALERT_FROM
+ALERT_TO may be a comma-separated list of recipients.
+"""
 import os
+import json
 import smtplib
 from email.message import EmailMessage
-from datetime import datetime
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import smtplib
-from openai import OpenAI
 
-# Load OpenAI API key from environment
-# openai.api_key = os.getenv("OPENAI_API_KEY")
+from app.database import SessionLocal
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 def fetch_recent_logs(db: Session, service_name: str, limit: int = 50) -> str:
-    """Fetch recent logs for a service from the database"""
-    query = f"""
+    """Fetch recent logs for a service (parameterized to avoid SQL injection)."""
+    query = text("""
         SELECT status_code, level, message, endpoint, event_time
         FROM logs
-        WHERE service = '{service_name}'
+        WHERE service = :service
         ORDER BY event_time DESC
-        LIMIT {limit}
-    """
-    rows = db.execute(text(query)).fetchall() 
-    logs_text = "\n".join([f"{row[0]} {row[1]} {row[2]}" for row in rows])
+        LIMIT :limit
+    """)
+    rows = db.execute(query, {"service": service_name, "limit": limit}).fetchall()
+    logs_text = "\n".join(f"{row[0]} {row[1]} {row[2]}" for row in rows)
     return logs_text or "No logs found."
 
 
-def summarize_logs(log_text: str) -> str:
-    """Call OpenAI GPT to summarize logs using 1.x+ API"""
-    prompt = f"""
-    You are a system reliability AI assistant.
-    Summarize the following logs and provide:
-    1. Likely root cause
-    2. Suggested next steps
-
-    Logs:
-    {log_text}
-    """
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=150
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"[AI_SUMMARY_FAILED] {e}"
-
-
-def send_email_alert(
-    service: str,
-    error_rate: float,
-    baseline_rate: float,
-    triggered_at: datetime,
-    recovered: bool = False,
-    db: Session = None,
-    ai_summary: bool = True
-):
-    """Send an email notification with optional AI log summarization"""
-
+def _smtp_send(subject: str, body: str) -> None:
     smtp_host = os.getenv("SMTP_HOST")
     if not smtp_host:
         print("[ALERT_EMAIL] SMTP_HOST not configured; skipping email")
@@ -79,27 +55,6 @@ def send_email_alert(
 
     recipients = [a.strip() for a in alert_to.split(",") if a.strip()]
 
-    subject = (f"[RECOVERY] {service} recovered" if recovered else f"[ALERT] {service} high error rate")
-    body = f"Service: {service}\nTime: {triggered_at.isoformat() if triggered_at else 'N/A'}\nError rate: {error_rate}%\nBaseline: {baseline_rate if baseline_rate is not None else 'N/A'}%\n"
-    if recovered:
-        body = "RECOVERY\n" + body
-    else:
-        body = "ALERT\n" + body
-
-    # -----------------------------
-    # AI log summary integration
-    # -----------------------------
-    if ai_summary and db:
-        try:
-            logs_text = fetch_recent_logs(db, service)
-            summary = summarize_logs(logs_text)
-            body += f"\n\nAI Root Cause Summary:\n{summary}"
-        except Exception as e:
-            body += f"\n\n[AI_SUMMARY_FAILED] {e}"
-
-    # -----------------------------
-    # Send email
-    # -----------------------------
     msg = EmailMessage()
     msg.set_content(body)
     msg["Subject"] = subject
@@ -120,6 +75,58 @@ def send_email_alert(
                 if smtp_user and smtp_password:
                     server.login(smtp_user, smtp_password)
                 server.send_message(msg)
-        print(f"[ALERT_EMAIL] Email sent for {service} (recovered={recovered}) to {recipients}")
+        print(f"[ALERT_EMAIL] Email sent to {recipients}")
     except Exception as e:
         print(f"[ALERT_EMAIL] Failed to send email: {e}")
+
+
+def _format_rca(rca: dict) -> str:
+    if not rca:
+        return "RCA: (pending)"
+    lines = ["AI Root Cause Analysis:"]
+    lines.append(f"  Root cause: {rca.get('root_cause', 'unknown')}")
+    lines.append(f"  First error at: {rca.get('first_error_at', 'n/a')}")
+    lines.append(f"  Cascade detected: {rca.get('cascade_detected', False)}")
+    affected = rca.get("affected_services") or []
+    lines.append(f"  Affected services: {', '.join(affected) if affected else 'n/a'}")
+    lines.append(f"  Confidence: {rca.get('confidence', 'n/a')}")
+    lines.append(f"  Recommended action: {rca.get('recommended_action', 'n/a')}")
+    return "\n".join(lines)
+
+
+def send_alert_email(alert_id: int) -> None:
+    """Load an alert and email its details, agent reasoning, and RCA report."""
+    db = SessionLocal()
+    try:
+        alert = db.execute(
+            text("""
+                SELECT service, severity, error_rate, baseline_rate, reason,
+                       recommended_action, agent_reasoning, rca_report, triggered_at
+                FROM alerts WHERE id = :id
+            """),
+            {"id": alert_id},
+        ).fetchone()
+    finally:
+        db.close()
+
+    if not alert:
+        print(f"[ALERT_EMAIL] alert {alert_id} not found; skipping email")
+        return
+
+    subject = f"[{alert.severity}] {alert.service} alert #{alert_id}"
+    body_parts = [
+        "ALERT",
+        f"Service: {alert.service}",
+        f"Severity: {alert.severity}",
+        f"Time: {alert.triggered_at.isoformat() if alert.triggered_at else 'N/A'}",
+        f"Error rate: {alert.error_rate}%",
+        f"Baseline: {alert.baseline_rate if alert.baseline_rate is not None else 'N/A'}%",
+        f"Reason: {alert.reason or 'n/a'}",
+        f"Recommended action: {alert.recommended_action or 'n/a'}",
+        "",
+        _format_rca(alert.rca_report),
+    ]
+    if alert.agent_reasoning:
+        body_parts += ["", "Agent reasoning:", alert.agent_reasoning]
+
+    _smtp_send(subject, "\n".join(body_parts))

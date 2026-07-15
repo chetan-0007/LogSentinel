@@ -3,14 +3,18 @@ from sqlalchemy import text
 from typing import List, Dict
 
 
-def get_recent_logs_logic(limit: int, db: Session) -> List[Dict]:
-    query = text("""
+def get_recent_logs_logic(limit: int, db: Session, service: str = None) -> List[Dict]:
+    base_query = """
         SELECT id, service, level, message, event_time, latency_ms, status_code
         FROM logs
-        ORDER BY event_time DESC
-        LIMIT :limit
-    """)
-    logs = db.execute(query, {"limit": limit}).fetchall()
+    """
+    params = {"limit": limit}
+    if service:
+        base_query += " WHERE service = :service"
+        params["service"] = service
+    base_query += " ORDER BY event_time DESC LIMIT :limit"
+
+    logs = db.execute(text(base_query), params).fetchall()
     return [
         {
             "id": log.id,
@@ -27,16 +31,20 @@ def get_recent_logs_logic(limit: int, db: Session) -> List[Dict]:
 
 def get_active_alerts_logic(db: Session) -> List[Dict]:
     query = text("""
-        SELECT service, last_alert_time, is_active
-        FROM service_alerts
-        WHERE is_active = TRUE
-        ORDER BY last_alert_time DESC
+        SELECT id, service, severity, error_rate, agent_reasoning, triggered_at
+        FROM alerts
+        WHERE status = 'ACTIVE'
+        ORDER BY triggered_at DESC
     """)
     alerts = db.execute(query).fetchall()
     return [
         {
+            "id": alert.id,
             "service": alert.service,
-            "triggered_at": alert.last_alert_time.isoformat() if alert.last_alert_time else None,
+            "severity": alert.severity,
+            "error_rate": float(alert.error_rate) if alert.error_rate is not None else None,
+            "agent_reasoning": alert.agent_reasoning,
+            "triggered_at": alert.triggered_at.isoformat() if alert.triggered_at else None,
             "status": "ACTIVE",
         }
         for alert in alerts
@@ -45,25 +53,30 @@ def get_active_alerts_logic(db: Session) -> List[Dict]:
 
 def get_alert_history_logic(limit: int, db: Session) -> List[Dict]:
     query = text("""
-        SELECT service, error_rate, baseline_rate, triggered_at
-        FROM alert_history
+        SELECT id, service, severity, status, error_rate, baseline_rate,
+               agent_reasoning, triggered_at
+        FROM alerts
         ORDER BY triggered_at DESC
         LIMIT :limit
     """)
     history = db.execute(query, {"limit": limit}).fetchall()
     return [
         {
+            "id": h.id,
             "service": h.service,
+            "severity": h.severity,
+            "status": h.status,
             "error_rate": float(h.error_rate) if h.error_rate else 0,
             "baseline_rate": float(h.baseline_rate) if h.baseline_rate else 0,
+            "agent_reasoning": h.agent_reasoning,
             "timestamp": h.triggered_at.isoformat() if h.triggered_at else None,
         }
         for h in history
     ]
 
 
-def get_error_rates_logic(db: Session) -> List[Dict]:
-    query = text("""
+def get_error_rates_logic(db: Session, service: str = None) -> List[Dict]:
+    base_query = """
         SELECT 
             service,
             ROUND(
@@ -74,10 +87,14 @@ def get_error_rates_logic(db: Session) -> List[Dict]:
             COUNT(*) as total_logs
         FROM logs
         WHERE event_time > CURRENT_TIMESTAMP - INTERVAL '1 hour'
-        GROUP BY service
-        ORDER BY error_percentage DESC
-    """)
-    stats = db.execute(query).fetchall()
+    """
+    params = {}
+    if service:
+        base_query += " AND service = :service"
+        params["service"] = service
+    base_query += " GROUP BY service ORDER BY error_percentage DESC"
+
+    stats = db.execute(text(base_query), params).fetchall()
     return [
         {
             "service": s.service,

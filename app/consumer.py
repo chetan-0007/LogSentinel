@@ -2,6 +2,7 @@ from kafka import KafkaConsumer
 import json
 from app.database import SessionLocal
 from app.models import Log
+from app.config import KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC
 import time
 from kafka import errors
 
@@ -9,8 +10,8 @@ def start_consumer():
     while True:
         try:
             consumer = KafkaConsumer(
-                "logs",
-                bootstrap_servers="kafka:9092",
+                KAFKA_TOPIC,
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
                 auto_offset_reset="earliest",
                 group_id="log-consumer-group",
                 value_deserializer=lambda m: json.loads(m.decode("utf-8"))

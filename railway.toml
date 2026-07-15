@@ -1,0 +1,40 @@
+# Railway multi-service configuration for LogSentinel.
+#
+# Railway builds one image from the Dockerfile and each service overrides the
+# start command. Provision Postgres as a Railway plugin and set DATABASE_URL.
+# Railway has no managed Kafka: point KAFKA_BOOTSTRAP_SERVERS at an external
+# broker (e.g. Upstash Kafka / Redpanda Cloud) and set it on every service.
+#
+# Shared environment variables to set in the Railway dashboard for all services:
+#   DATABASE_URL, KAFKA_BOOTSTRAP_SERVERS, ANTHROPIC_API_KEY, LLM_MODEL,
+#   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, ALERT_TO, ALERT_FROM
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+# --- API (web) ---
+[[services]]
+name = "api"
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+[services.variables]
+RUN_MONITOR_IN_API = "false"
+
+# --- Kafka consumer (logs -> Postgres) ---
+[[services]]
+name = "consumer"
+startCommand = "python -m app.consumer"
+
+# --- Monitoring agent (dedicated process) ---
+[[services]]
+name = "monitoring-agent"
+startCommand = "python -m app.run_monitor"
+
+# --- MCP server (streamable HTTP) ---
+[[services]]
+name = "mcp-server"
+startCommand = "python mcp_server.py"
+[services.variables]
+MCP_TRANSPORT = "http"
+MCP_PORT = "8001"
+API_BASE_URL = "http://api:8000"
