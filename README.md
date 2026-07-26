@@ -87,6 +87,7 @@ flowchart LR
 - MCP integration for AI tools like Claude Desktop and Cursor
 - Email notifications for important alerts
 - Containerized setup with Docker Compose for easy local demoing
+- Kubernetes manifests are also included in the k8s folder for deployment scenarios that need orchestration beyond Docker Compose
 
 ---
 
@@ -327,7 +328,7 @@ HTTP (`MCP_TRANSPORT=http`, port `8001`) for containerized/remote use.
 ## 🚀 Deployment Notes
 
 This project is designed to run locally with Docker Compose and can also be adapted
-for other hosting platforms. 
+for other hosting platforms.
 
 ### 👤 Author
 
