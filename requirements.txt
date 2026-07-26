@@ -9,5 +9,6 @@ httpx
 anthropic
 langgraph
 langchain-anthropic
+langchain-groq
 langchain-core
 mcp

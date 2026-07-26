@@ -6,18 +6,26 @@ alert, reasoning across the current error rate, recent log content, and prior
 alert history. It assigns a severity, avoids double-alerting within 30 minutes,
 and returns a structured JSON decision.
 
-If ANTHROPIC_API_KEY is not configured the agent is unavailable and callers
+If the configured provider has no API key, the agent is unavailable and callers
 fall back to a deterministic decision (see `app.monitoring`).
 """
 import json
 import re
 import contextvars
+import time
 from datetime import datetime, timezone
 
 from sqlalchemy import text
 
 from app.database import SessionLocal
-from app.config import LLM_MODEL, ANTHROPIC_API_KEY
+from app.config import (
+    LLM_MODEL,
+    ANTHROPIC_API_KEY,
+    GROQ_API_KEY,
+    LLM_PROVIDER,
+    LLM_MAX_RETRIES,
+    LLM_RETRY_DELAY_SECONDS,
+)
 
 DEDUP_MINUTES = 30
 VALID_SEVERITIES = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
@@ -180,11 +188,26 @@ def resolve_alert_record(alert_id: int) -> dict:
 # Agent construction
 # --------------------------------------------------------------------------
 def _build_agent():
-    """Build the LangGraph react agent, or return None if Anthropic is unset."""
-    if not ANTHROPIC_API_KEY:
-        return None
+    """Build the LangGraph react agent, or return None if the configured provider is unavailable."""
+    provider = (LLM_PROVIDER or "anthropic").strip().lower()
 
-    from langchain_anthropic import ChatAnthropic
+    if provider == "groq":
+        if not GROQ_API_KEY:
+            return None
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError as exc:
+            raise RuntimeError("langchain-groq is not installed") from exc
+        model = ChatGroq(model=LLM_MODEL, api_key=GROQ_API_KEY, temperature=0)
+    else:
+        if not ANTHROPIC_API_KEY:
+            return None
+        try:
+            from langchain_anthropic import ChatAnthropic
+        except ImportError as exc:
+            raise RuntimeError("langchain-anthropic is not installed") from exc
+        model = ChatAnthropic(model=LLM_MODEL, api_key=ANTHROPIC_API_KEY, temperature=0)
+
     from langchain_core.tools import tool
     from langgraph.prebuilt import create_react_agent
 
@@ -282,7 +305,6 @@ def _build_agent():
         """Mark an existing alert as resolved."""
         return resolve_alert_record(alert_id)
 
-    model = ChatAnthropic(model=LLM_MODEL, api_key=ANTHROPIC_API_KEY, temperature=0)
     tools = [get_error_rate, get_recent_logs, get_alert_history, trigger_alert, resolve_alert]
     return create_react_agent(model, tools, prompt=SYSTEM_PROMPT)
 
@@ -301,6 +323,101 @@ def _extract_text(message) -> str:
                 parts.append(str(block))
         return "\n".join(parts)
     return str(content)
+
+
+def _collect_service_context(service: str, current_rate: float, baseline_rate) -> str:
+    """Build a compact prompt context for a direct LLM call (used by Groq)."""
+    db = SessionLocal()
+    try:
+        recent_logs = db.execute(
+            text("""
+                SELECT level, status_code, endpoint, message, event_time
+                FROM logs
+                WHERE service = :service
+                ORDER BY event_time DESC
+                LIMIT 10
+            """),
+            {"service": service},
+        ).fetchall()
+        history = db.execute(
+            text("""
+                SELECT severity, status, reason, triggered_at
+                FROM alerts
+                WHERE service = :service
+                  AND triggered_at > CURRENT_TIMESTAMP - make_interval(days => 1)
+                ORDER BY triggered_at DESC
+            """),
+            {"service": service},
+        ).fetchall()
+    finally:
+        db.close()
+
+    log_lines = []
+    for row in recent_logs:
+        level = row.level.value if hasattr(row.level, "value") else row.level
+        log_lines.append(
+            f"[{row.event_time.isoformat() if row.event_time else '?'}] {level} {row.status_code or ''} {row.endpoint or ''} {row.message or ''}".strip()
+        )
+
+    history_lines = []
+    for row in history:
+        history_lines.append(
+            f"[{row.triggered_at.isoformat() if row.triggered_at else '?'}] {row.severity}/{row.status}: {row.reason or ''}".strip()
+        )
+
+    return (
+        f"Candidate service: {service}\n"
+        f"Pre-filter current error rate (last 10 min): {current_rate}%\n"
+        f"Baseline error rate (50-60 min ago): {baseline_rate if baseline_rate is not None else 'unknown'}%\n"
+        f"Recent logs:\n" + ("\n".join(log_lines[:8]) if log_lines else "(none)") + "\n\n"
+        f"Recent alert history:\n" + ("\n".join(history_lines[:8]) if history_lines else "(none)") + "\n\n"
+        "Investigate and decide whether to alert. Return ONLY a JSON object with keys "
+        "decision, severity, reasoning, recommended_action."
+    )
+
+
+def _invoke_groq_direct(service: str, current_rate: float, baseline_rate) -> dict:
+    """Use a direct Groq chat completion instead of tool-calling, avoiding invalid tool message formats."""
+    if not GROQ_API_KEY:
+        raise RuntimeError("GROQ_API_KEY not set")
+
+    prompt = _collect_service_context(service, current_rate, baseline_rate)
+    try:
+        from groq import Groq
+    except ImportError as exc:
+        raise RuntimeError("groq SDK is not installed") from exc
+
+    client = Groq(api_key=GROQ_API_KEY)
+    last_error = None
+    for attempt in range(LLM_MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                temperature=0,
+                max_tokens=700,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are LogSentinel's autonomous observability agent. "
+                            "Return ONLY JSON with decision, severity, reasoning, recommended_action."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            text_out = response.choices[0].message.content or ""
+            return _parse_decision(text_out)
+        except Exception as exc:
+            last_error = exc
+            if attempt < LLM_MAX_RETRIES - 1:
+                time.sleep(LLM_RETRY_DELAY_SECONDS * (attempt + 1))
+                continue
+            raise RuntimeError(f"Groq request failed: {exc}") from exc
+
+    if last_error is not None:
+        raise RuntimeError(f"Groq request failed: {last_error}") from last_error
+    return {"decision": "unknown", "severity": "MEDIUM", "reasoning": "", "recommended_action": ""}
 
 
 def _parse_decision(text_out: str) -> dict:
@@ -324,11 +441,20 @@ def investigate_service(service: str, current_rate: float, baseline_rate) -> dic
 
     Returns the structured decision dict. If the agent created an alert during
     the run, it is enriched with the full reasoning trace and recommended action.
-    Raises RuntimeError if the agent is unavailable (no ANTHROPIC_API_KEY).
+    Raises RuntimeError if the configured LLM provider is unavailable.
     """
+    provider = (LLM_PROVIDER or "anthropic").strip().lower()
+    if provider == "groq":
+        decision = _invoke_groq_direct(service, current_rate, baseline_rate)
+        created = _created_alerts.get() or []
+        if created:
+            _enrich_alert(created[-1], decision)
+            decision["alert_id"] = created[-1]
+        return decision
+
     agent = _build_agent()
     if agent is None:
-        raise RuntimeError("monitoring agent unavailable (ANTHROPIC_API_KEY not set)")
+        raise RuntimeError(f"monitoring agent unavailable for provider '{LLM_PROVIDER}'")
 
     token = _created_alerts.set([])
     try:
