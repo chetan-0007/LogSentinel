@@ -327,8 +327,7 @@ HTTP (`MCP_TRANSPORT=http`, port `8001`) for containerized/remote use.
 ## 🚀 Deployment Notes
 
 This project is designed to run locally with Docker Compose and can also be adapted
-for other hosting platforms. The repository no longer includes Railway-specific deployment
-configuration.
+for other hosting platforms. 
 
 ### 👤 Author
 
