@@ -28,4 +28,4 @@ MCP_TRANSPORT = os.getenv("MCP_TRANSPORT", "stdio")
 MCP_PORT = int(os.getenv("MCP_PORT", "8001"))
 
 # --- Deployment ---
-RAILWAY_ENVIRONMENT = os.getenv("RAILWAY_ENVIRONMENT")
+# No platform-specific deployment env var required.

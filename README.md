@@ -1,10 +1,24 @@
 # LogSentinel
 
-**AI-Powered Distributed Log Monitoring & Incident Intelligence Platform**
+## Problem Statement
 
-LogSentinel is a production-style distributed observability system that performs real-time log ingestion, automated anomaly detection, agentic alerting, and multi-step AI root cause analysis.
+Modern software systems generate huge volumes of logs, but engineering teams often struggle to detect incidents quickly, understand the root cause, and communicate the issue clearly. Traditional monitoring is usually reactive and threshold-based, which can miss subtle failures or create noisy alerts.
 
-Built using FastAPI, Kafka, PostgreSQL, and Docker, it uses an **LLM agent (LangGraph + Anthropic Claude)** to reason about incidents instead of relying on static thresholds alone, and exposes its data to AI assistants (Claude Desktop, Cursor) through a built-in **MCP server**.
+LogSentinel solves this by combining real-time log ingestion, automated anomaly detection, AI-powered alert reasoning, and root cause analysis in one platform. It is designed to show how an observability system can move from raw logs to actionable incident intelligence.
+
+## What this project demonstrates
+
+This project is a full-stack demo of an AI-assisted observability platform. It shows how a system can:
+
+- ingest logs from multiple services in real time
+- detect unusual error spikes
+- decide whether an alert should be raised
+- generate a structured root cause analysis report
+- present the findings through a dashboard and MCP tools
+
+For a recruiter or hiring manager, the value is clear: this project reflects real-world engineering concerns around reliability, incident response, distributed systems, and AI-assisted operations.
+
+Built with FastAPI, Kafka, PostgreSQL, Docker, and LangGraph, it is designed as a production-style prototype for learning, demoing, and discussion.
 
 ---
 
@@ -58,22 +72,21 @@ flowchart LR
 - **MCP Server** – Exposes observability data to AI assistants
 - **Email Notification Service** – Sends alert emails with agent reasoning + RCA
 - **Dashboard UI** – Visualizes logs, alerts, and RCA reports
-- **Docker Compose / Railway** – Orchestration & deployment
+- **Docker Compose** – Orchestration & deployment
 
 ---
 
 ## 🚀 Features
 
-- Real-time log ingestion
-- Kafka-based streaming pipeline
-- Hybrid monitoring: deterministic threshold pre-filter + LangGraph LLM agent
-- Severity classification (LOW / MEDIUM / HIGH / CRITICAL) with 30-minute dedup
-- Agentic multi-step root cause analysis with cascade detection
-- Agent reasoning trace and RCA report stored in Postgres and shown in the dashboard
-- MCP server for Claude Desktop / Cursor integration
-- Email notifications for critical alerts
-- Anthropic Claude for all LLM calls
-- Fully containerized environment + Railway deployment config
+- Real-time log ingestion from services through a REST API
+- Kafka-based streaming pipeline for distributed event handling
+- Hybrid monitoring using threshold checks plus an LLM-powered agent
+- Severity classification such as LOW, MEDIUM, HIGH, and CRITICAL
+- Agentic root cause analysis that explains likely causes and next actions
+- Dashboard views for recent logs, alerts, and error-rate trends
+- MCP integration for AI tools like Claude Desktop and Cursor
+- Email notifications for important alerts
+- Containerized setup with Docker Compose for easy local demoing
 
 ---
 
@@ -131,20 +144,19 @@ Copy `.env.example` to `.env` and fill in the values. See the full table below.
 cp .env.example .env
 ```
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_URL` | yes | SQLAlchemy Postgres connection string |
-| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | yes (compose) | Postgres container credentials |
-| `KAFKA_BOOTSTRAP_SERVERS` | yes | Kafka broker (default `kafka:9092`) |
-| `KAFKA_TOPIC` | no | Topic name (default `logs`) |
-| `ANTHROPIC_API_KEY` | for AI | Anthropic API key; without it the agents fall back to deterministic logic |
-| `LLM_MODEL` | no | Claude model (default `claude-sonnet-4-5`) |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | for email | SMTP delivery |
-| `ALERT_TO` / `ALERT_FROM` | for email | Recipients / sender |
-| `API_BASE_URL` | MCP | URL the MCP server uses to reach the API |
-| `MCP_TRANSPORT` / `MCP_PORT` | MCP | `stdio` (default) or `http` |
-| `RUN_MONITOR_IN_API` | no | Set `false` when running a dedicated monitor service |
-| `RAILWAY_ENVIRONMENT` | no | Set automatically by Railway |
+| Variable                                                  | Required      | Purpose                                                                   |
+| --------------------------------------------------------- | ------------- | ------------------------------------------------------------------------- |
+| `DATABASE_URL`                                            | yes           | SQLAlchemy Postgres connection string                                     |
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD`     | yes (compose) | Postgres container credentials                                            |
+| `KAFKA_BOOTSTRAP_SERVERS`                                 | yes           | Kafka broker (default `kafka:9092`)                                       |
+| `KAFKA_TOPIC`                                             | no            | Topic name (default `logs`)                                               |
+| `ANTHROPIC_API_KEY`                                       | for AI        | Anthropic API key; without it the agents fall back to deterministic logic |
+| `LLM_MODEL`                                               | no            | Claude model (default `claude-sonnet-4-5`)                                |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | for email     | SMTP delivery                                                             |
+| `ALERT_TO` / `ALERT_FROM`                                 | for email     | Recipients / sender                                                       |
+| `API_BASE_URL`                                            | MCP           | URL the MCP server uses to reach the API                                  |
+| `MCP_TRANSPORT` / `MCP_PORT`                              | MCP           | `stdio` (default) or `http`                                               |
+| `RUN_MONITOR_IN_API`                                      | no            | Set `false` when running a dedicated monitor service                      |
 
 ### 3️⃣ Run with Docker
 
@@ -219,9 +231,8 @@ python send_bulk_errors.py
 - Apache Kafka
 - Docker & Docker Compose
 - LangGraph + langchain-anthropic (monitoring agent)
-- Anthropic Claude (`claude-sonnet-4-5`)
+- Anthropic Claude (`claude-sonnet-4-5`) or Groq
 - Model Context Protocol (`mcp` SDK)
-- Railway (deployment)
 
 ---
 
@@ -291,26 +302,11 @@ HTTP (`MCP_TRANSPORT=http`, port `8001`) for containerized/remote use.
 
 ---
 
-## 🚂 Deploy to Railway
+## 🚀 Deployment Notes
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
-
-`railway.toml` defines four services (`api`, `consumer`, `monitoring-agent`,
-`mcp-server`) built from the same Dockerfile. A `Procfile` is provided as a
-fallback.
-
-Steps:
-
-1. Create a new Railway project and add the **PostgreSQL** plugin; Railway sets `DATABASE_URL`.
-2. Kafka is **not** offered as a managed Railway service. Provision an external broker
-   (e.g. Upstash Kafka or Redpanda Cloud) and set `KAFKA_BOOTSTRAP_SERVERS` on every service.
-3. Set the shared variables in the Railway dashboard: `ANTHROPIC_API_KEY`, `LLM_MODEL`,
-   `SMTP_*`, `ALERT_TO`, `ALERT_FROM`.
-4. On the `api` service set `RUN_MONITOR_IN_API=false` (the dedicated `monitoring-agent`
-   service runs the monitor loop instead).
-
-> Note: Railway no longer offers an always-free tier (usage-based trial credits only),
-> and running Kafka + Postgres + four services will consume credits.
+This project is designed to run locally with Docker Compose and can also be adapted
+for other hosting platforms. The repository no longer includes Railway-specific deployment
+configuration.
 
 ### 👤 Author
 

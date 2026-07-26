@@ -1,8 +1,8 @@
 """Standalone monitoring-agent runner.
 
 Runs the same hybrid monitoring cycle as the API's in-process background thread,
-but as its own process. Used as a dedicated Railway service. Locally the API
-runs the monitor in-process, so this is not needed for docker-compose.
+but as its own process. This is useful when you want the monitor in a separate
+process from the API container.
 
 Run: python -m app.run_monitor
 """
