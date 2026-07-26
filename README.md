@@ -90,6 +90,28 @@ flowchart LR
 
 ---
 
+## 🧠 Engineering Narrative
+
+This project was designed to show how an incident-response system can move from noisy logs to actionable insight.
+
+### Why Kafka?
+
+Kafka gives the system a durable, decoupled backbone for log streaming. Instead of writing directly to the database from every service, the platform can buffer events, absorb bursts, and let downstream consumers process them independently. That matters for reliability and for demonstrating how real distributed systems handle ingestion at scale.
+
+### Why a threshold pre-filter and an LLM agent?
+
+The threshold filter is cheap and fast, so the system can quickly identify likely problem areas without paying the cost of calling an LLM for every service. The LLM agent is then used selectively for deeper reasoning, where context and explanation are more valuable than raw speed.
+
+### How cascade detection works
+
+When an alert is triggered, the RCA pipeline looks at logs from the affected service and compares them to logs from other services in the same time window. If multiple services show correlated errors around the same time, the system flags a likely cascade and surfaces that in the RCA report.
+
+### What would change in production?
+
+A production version would add stronger durability, retries, backpressure controls, observability for the platform itself, better auth, and more robust model fallback and cost controls. It would also likely move from a demo-oriented single-node setup to a more scalable deployment with proper queue partitioning, monitoring, and incident workflows.
+
+---
+
 ## 📧 Email Alerts
 
 When error rates exceed configured thresholds:
