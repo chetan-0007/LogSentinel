@@ -4,9 +4,17 @@ Values are resolved at import time so the whole app shares one source of truth.
 """
 import os
 
-# --- LLM (Anthropic) ---
-LLM_MODEL = os.getenv("LLM_MODEL", "claude-sonnet-4-5")
+# --- LLM provider ---
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic").strip().lower()
+LLM_MODEL = os.getenv(
+    "LLM_MODEL",
+    "claude-sonnet-4-5" if LLM_PROVIDER == "anthropic" else "llama-3.1-8b-instant",
+)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "3"))
+LLM_RETRY_DELAY_SECONDS = float(os.getenv("LLM_RETRY_DELAY_SECONDS", "2"))
+
 
 # --- Kafka ---
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")

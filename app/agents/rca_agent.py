@@ -20,7 +20,7 @@ from datetime import timedelta
 from sqlalchemy import text
 
 from app.database import SessionLocal
-from app.config import LLM_MODEL, ANTHROPIC_API_KEY
+from app.config import LLM_MODEL, ANTHROPIC_API_KEY, GROQ_API_KEY, LLM_PROVIDER
 
 WINDOW_MINUTES = 10
 
@@ -73,7 +73,38 @@ def _fmt_log(r) -> str:
 
 
 def _synthesize_with_llm(context: str) -> dict | None:
-    """Ask Claude for a structured RCA report. Returns None on failure/no key."""
+    """Ask the configured LLM provider for a structured RCA report. Returns None on failure/no key."""
+    provider = (LLM_PROVIDER or "anthropic").strip().lower()
+
+    if provider == "groq":
+        if not GROQ_API_KEY:
+            return None
+        try:
+            from groq import Groq
+
+            client = Groq(api_key=GROQ_API_KEY)
+            prompt = (
+                "You are a site reliability engineer performing root-cause analysis.\n"
+                "Given the evidence below, respond with ONLY a JSON object with keys: "
+                "root_cause (string), first_error_at (ISO timestamp or null), "
+                "affected_services (array of strings), cascade_detected (boolean), "
+                "confidence (\"HIGH\"|\"MEDIUM\"|\"LOW\"), recommended_action (string).\n\n"
+                f"Evidence:\n{context}\n"
+            )
+            resp = client.chat.completions.create(
+                model=LLM_MODEL,
+                temperature=0,
+                max_tokens=700,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text_out = resp.choices[0].message.content or ""
+            match = re.search(r"\{.*\}", text_out, re.DOTALL)
+            if match:
+                return json.loads(match.group(0))
+        except Exception as e:
+            print(f"[RCA] Groq synthesis failed: {e}")
+        return None
+
     if not ANTHROPIC_API_KEY:
         return None
     try:
